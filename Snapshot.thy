@@ -393,7 +393,7 @@ lemma exists_snapshot_for_all_p:
   assumes
     "trace init t final"
   shows
-    "\<exists>i. ~ has_snapshotted (S t i) p \<and> has_snapshotted (S t (Suc i)) p"
+    "\<exists>i. ~ has_snapshotted (S t i) p \<and> has_snapshotted (S t (Suc i)) p" (is ?Q)
 proof -
   obtain i where "has_snapshotted (S t i) p" using l2 assms by blast
   let ?j = "LEAST j. has_snapshotted (S t j) p"
@@ -406,11 +406,38 @@ proof -
   qed
   have "?j \<le> i" 
     by (meson Least_le \<open>has_snapshotted (S t i) p\<close>)
-  have "~ has_snapshotted (S t (?j - 1)) p" 
-    by (smt \<open>(LEAST j. ps (S t j) p \<noteq> None) \<noteq> 0\<close> add_diff_cancel_left' le_SucE le_zero_eq plus_1_eq_Suc wellorder_Least_lemma(2) zero_induct)
-  then show ?thesis
-    by (smt Least_eq_0 \<open>(LEAST j. has_snapshotted (S t j) p) \<noteq> 0\<close> \<open>has_snapshotted (S t i) p\<close> zero_induct)
+  have "\<not> has_snapshotted (S t (?j - 1)) p" (is ?P)
+  proof (rule ccontr)
+    assume "\<not> ?P"
+    then have "has_snapshotted (S t (?j - 1)) p" by simp
+    then have "\<exists>j. j < ?j \<and> has_snapshotted (S t j) p" 
+      by (metis One_nat_def \<open>(LEAST j. ps (S t j) p \<noteq> None) \<noteq> 0\<close> diff_less lessI not_gr_zero)
+    then show False 
+      using not_less_Least by blast
+  qed
+  show ?thesis
+  proof (rule ccontr)
+    assume "\<not> ?Q"
+    have "\<forall>i. \<not> has_snapshotted (S t i) p"
+    proof (rule allI)
+      fix i'
+      show "\<not> has_snapshotted (S t i') p"
+      proof (induct i')
+        case 0
+        then show ?case 
+          using \<open>(LEAST j. ps (S t j) p \<noteq> None) \<noteq> 0\<close> by force
+      next
+        case (Suc i'')
+        then show ?case 
+          using \<open>\<nexists>i. \<not> ps (S t i) p \<noteq> None \<and> ps (S t (Suc i)) p \<noteq> None\<close> by blast
+      qed
+    qed
+    then show False 
+      using \<open>ps (S t i) p \<noteq> None\<close> by blast
+  qed
 qed
+
+thm zero_induct
 
 lemma all_processes_snapshotted_in_final_state:
   assumes
@@ -2944,24 +2971,26 @@ next
         case (Recv cid' r s u u' m)
         with step no_marker Recv show ?thesis by (cases "cid = cid'", auto)
       qed
+    next
+      case False
+      then have asm: "\<exists>!j. j < length (msgs (S t i) cid) \<and> msgs (S t i) cid ! j = Marker"
+        using Suc by simp
+      have len_filter: "length (filter ((=) Marker) (msgs (S t i) cid)) = 1" 
+        by (metis False \<open>Marker \<notin> set (msgs (S t i) cid) \<or> (\<exists>!j. j < length (msgs (S t i) cid) \<and> msgs (S t i) cid ! j = Marker)\<close> exists_one_iff_filter_one)
+      have snap_p: "has_snapshotted (S t i) p" 
+        using False Suc.prems no_marker_if_no_snapshot by blast
+      show ?thesis
+      proof (cases "t ! i")
+        case (Snapshot r)
+        have "r \<noteq> p"
+        proof (rule ccontr)
+          assume "~ r \<noteq> p"
+          moreover have "can_occur (t ! i) (S t i)" using happen_implies_can_occur step by blast
+          ultimately show False using snap_p can_occur_def Snapshot by auto
+        qed
+        then have "msgs (S t (Suc i)) cid = msgs (S t i) cid" using step Snapshot Suc by auto
+        then show ?thesis using asm by simp
       next
-        case False
-        then have asm: "\<exists>!j. j < length (msgs (S t i) cid) \<and> msgs (S t i) cid ! j = Marker"
-          using Suc by simp
-        have snap_p: "has_snapshotted (S t i) p" 
-          using False Suc.prems no_marker_if_no_snapshot by blast
-        show ?thesis
-        proof (cases "t ! i")
-          case (Snapshot r)
-          have "r \<noteq> p"
-          proof (rule ccontr)
-            assume "~ r \<noteq> p"
-            moreover have "can_occur (t ! i) (S t i)" using happen_implies_can_occur step by blast
-            ultimately show False using snap_p can_occur_def Snapshot by auto
-          qed
-          then have "msgs (S t (Suc i)) cid = msgs (S t i) cid" using step Snapshot Suc by auto
-          then show ?thesis using asm by simp
-        next
         case (RecvMarker cid' r s)
         then show ?thesis
         proof (cases "cid = cid'")
@@ -3006,38 +3035,38 @@ next
         then show ?thesis
         proof (cases "cid = cid'")
           case True
-          then have "msgs (S t (Suc i)) cid = msgs (S t i) cid @ [Msg m]" using step Send by auto
-          then show ?thesis
+          then have new_messages: "msgs (S t (Suc i)) cid = msgs (S t i) cid @ [Msg m]"
+            using step Send by auto
+          then have "\<exists>!j. j < length (msgs (S t (Suc i)) cid) \<and> msgs (S t (Suc i)) cid ! j = Marker"
           proof -
-            obtain j where "j < length (msgs (S t i) cid) \<and> msgs (S t i) cid ! j = Marker"
-              using asm by blast
-            have "\<forall>k. k \<noteq> j \<and> k < length (msgs (S t (Suc i)) cid) \<longrightarrow> msgs (S t (Suc i)) cid ! k \<noteq> Marker"
-              by (smt One_nat_def Suc_diff_Suc \<open>j < length (msgs (S t i) cid) \<and> msgs (S t i) cid ! j = Marker\<close> \<open>msgs (S t (Suc i)) cid = msgs (S t i) cid @ [Msg m]\<close> asm butlast_snoc diff_is_0_eq diff_zero le_eq_less_or_eq length_butlast length_greater_0_conv less_Suc_eq message.distinct(1) nth_Cons_0 nth_append)
-            then show ?thesis 
-              by (metis in_set_conv_nth)
+            have "length (filter ((=) Marker) (msgs (S t (Suc i)) cid))
+                = length (filter ((=) Marker) (msgs (S t i) cid))
+                + length (filter ((=) Marker) [Msg m])" 
+              by (simp add: new_messages)
+            then have "length (filter ((=) Marker) (msgs (S t (Suc i)) cid)) = 1"
+              using len_filter by simp
+            then show ?thesis using exists_one_iff_filter_one by metis
           qed
+          then show ?thesis by simp
         next
           case False
           then show ?thesis using step Send asm by auto
         qed
       next
         case (Recv cid' r s u u' m)
-        then show ?thesis
+       then show ?thesis
         proof (cases "cid = cid'")
           case True
           then have new_msgs: "Msg m # msgs (S t (Suc i)) cid = msgs (S t i) cid" using step Recv by auto
           then show ?thesis
           proof -
-            obtain j where "j < length (msgs (S t i) cid) \<and> msgs (S t i) cid ! j = Marker"
-              using asm by blast
-            then have "j > 0" using new_msgs 
-              by (metis gr0I message.distinct(1) nth_Cons_0)
-            moreover have "msgs (S t (Suc i)) cid = tl (msgs (S t i) cid)" using new_msgs 
-              by (metis list.sel(3))
-            moreover have "\<forall>k. k \<noteq> j \<and> k < length (msgs (S t i) cid) \<longrightarrow> msgs (S t i) cid ! k \<noteq> Marker"
-              using \<open>j < length (msgs (S t i) cid) \<and> msgs (S t i) cid ! j = Marker\<close> asm by blast
-            ultimately show ?thesis
-              by (smt Suc_mono add_diff_cancel_left' in_set_conv_nth length_Suc_conv new_msgs nth_tl plus_1_eq_Suc)
+            have "length (filter ((=) Marker) (msgs (S t i) cid))
+                = length (filter ((=) Marker) [Msg m])
+                + length (filter ((=) Marker) (msgs (S t (Suc i)) cid))" 
+              by (metis append_Cons append_Nil filter_append len_filter length_append new_msgs)
+            then have "length (filter ((=) Marker) (msgs (S t (Suc i)) cid)) = 1"
+              using len_filter by simp
+            then show ?thesis using exists_one_iff_filter_one by metis
           qed
         next
           case False

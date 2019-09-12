@@ -112,6 +112,11 @@ abbreviation s7 :: "(PType, SType, MType) configuration" where
        channel_snapshot = (%d. if d = 0 then ([], Done) else if d = 1 then ([M'], Done) else ([], NotStarted))
     \<rparr>"
 
+lemma s7_no_marker:
+  shows
+    "\<forall>cid. Marker \<notin> set (msgs s7 cid)"
+  by simp
+
 interpretation computation chan trans send recv init s7
 proof
   have "distributed_system chan"
@@ -226,8 +231,12 @@ proof
                 []
                 (distributed_system.s chan Example.trans send recv init t i)" 
         by (metis (no_types, lifting) \<open>distributed_system chan\<close> distributed_system.exists_trace_for_any_i distributed_system.trace.simps distributed_system.trace_and_start_determines_end not_less s7_is_fin take_all tr_exists)
-      then have "Marker \<notin> set (msgs (distributed_system.s chan Example.trans send recv init t i) cid)" 
-        by (smt One_nat_def Suc_eq_plus1 \<open>\<not> i < length t\<close> \<open>distributed_system chan\<close> distributed_system.s_def in_set_conv_nth leI less_antisym list.size(3) list.size(4) message.distinct(1) not_less0 nth_Cons_0 order_refl s7_is_fin select_convs(2) take_all)
+      then have "Marker \<notin> set (msgs (distributed_system.s chan Example.trans send recv init t i) cid)"
+      proof -
+        have "distributed_system.s chan Example.trans send recv init t i = s7" 
+          using \<open>distributed_system chan\<close> \<open>distributed_system.trace chan Example.trans send recv (distributed_system.s chan Example.trans send recv init t (length t)) [] (distributed_system.s chan Example.trans send recv init t i)\<close> distributed_system.trace.simps s7_is_fin by fastforce
+        then show ?thesis using s7_no_marker by simp
+      qed
       then show False using marker_in_channel by simp
     qed
     then show "(\<exists>j\<ge>i. Marker \<notin> set (msgs (distributed_system.s chan Example.trans send recv init t j) cid))"
@@ -237,8 +246,12 @@ proof
             (take ((length t) - i) (drop i t))
             (distributed_system.s chan Example.trans send recv init t (length t))" 
         using \<open>distributed_system chan\<close> \<open>i < length t\<close> distributed_system.exists_trace_for_any_i_j less_imp_le_nat tr_exists by blast
-      then have "Marker \<notin> set (msgs (distributed_system.s chan Example.trans send recv init t (length t)) cid)" 
-        by (smt One_nat_def Suc_eq_plus1 in_set_conv_nth less_antisym list.size(3) list.size(4) message.distinct(1) not_less0 nth_Cons_0 s7_is_fin select_convs(2))
+      then have "Marker \<notin> set (msgs (distributed_system.s chan Example.trans send recv init t (length t)) cid)"
+      proof -
+        have "distributed_system.s chan Example.trans send recv init t (length t) = s7" 
+          by (simp add: s7_is_fin)
+        then show ?thesis using s7_no_marker by simp
+      qed
       then show ?thesis 
         using \<open>i < length t\<close> less_imp_le_nat by blast
     qed

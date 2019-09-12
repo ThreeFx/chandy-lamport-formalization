@@ -178,7 +178,25 @@ proof (rule ccontr)
     ultimately have "takeWhile ((\<noteq>) a) l = take ?j l"
     proof -
       have "length (takeWhile ((\<noteq>) a) l) = ?j" 
-        by (smt \<open>Min {j. j < length l \<and> l ! j = a} < length l\<close> head_all_not_a le_cases3 le_eq_less_or_eq length_takeWhile_le nth_length_takeWhile nth_mem set_takeWhileD tail_all_a takeWhile_nth)
+      proof -
+        have "length (takeWhile ((\<noteq>) a) l) \<le> ?j" (is ?S)
+        proof (rule ccontr)
+          assume "\<not> ?S"
+          then have "l ! ?j \<noteq> a" 
+            by (metis (mono_tags, lifting) not_le_imp_less nth_mem set_takeWhileD takeWhile_nth)
+          then show False 
+            using \<open>Min {j. j < length l \<and> l ! j = a} < length l\<close> tail_all_a by blast
+        qed
+        moreover have "length (takeWhile ((\<noteq>) a) l) \<ge> ?j" (is ?T)
+        proof (rule ccontr)
+          assume "\<not> ?T"
+          then have "\<exists>j. j < ?j \<and> l ! j = a" 
+            by (metis (mono_tags, lifting) \<open>Min {j. j < length l \<and> l ! j = a} < length l\<close> calculation le_less_trans not_le_imp_less nth_length_takeWhile)
+          then show False 
+            using head_all_not_a by blast
+        qed
+        ultimately show ?thesis by simp
+      qed
       moreover have "length (take ?j l) = ?j" 
         by (metis calculation takeWhile_eq_take)
       ultimately show ?thesis 
@@ -246,6 +264,100 @@ proof -
       using assms by auto
     then show False using one_j by blast
   qed
+qed
+
+lemma exists_one_iff_filter_one:
+  shows
+    "(\<exists>!j. j < length l \<and> l ! j = a) \<longleftrightarrow> length (filter ((=) a) l) = 1"
+proof (rule iffI)
+  assume "\<exists>!j. j < length l \<and> l ! j = a"
+  then obtain j where "j < length l" "l ! j = a"
+    by blast
+  moreover have "\<forall>k. k \<noteq> j \<and> k < length l \<longrightarrow> l ! k \<noteq> a" 
+    using \<open>\<exists>!j. j < length l \<and> l ! j = a\<close> \<open>j < length l\<close> \<open>l ! j = a\<close> by blast
+  moreover have "l = take j l @ [l ! j] @ drop (j+1) l" 
+    by (metis Cons_eq_appendI Cons_nth_drop_Suc Suc_eq_plus1 append_self_conv2 append_take_drop_id calculation(1) calculation(2))
+  moreover have "filter ((=) a) (take j l) = []"
+  proof -
+    have "\<forall>k. k < length (take j l) \<longrightarrow> (take j l) ! k \<noteq> a" 
+      using calculation(3) by auto
+    then show ?thesis 
+      by (metis (full_types) filter_False in_set_conv_nth)
+  qed
+  moreover have "filter ((=) a) (drop (j+1) l) = []"
+  proof -
+    have "\<forall>k. k < length (drop (j+1) l) \<longrightarrow> (drop (j+1) l) ! k \<noteq> a" 
+      using calculation(3) by auto
+    then show ?thesis
+      by (metis (full_types) filter_False in_set_conv_nth)
+  qed
+  ultimately show "length (filter ((=) a) l) = 1" 
+    by (metis (mono_tags, lifting) One_nat_def Suc_eq_plus1 append_Cons append_self_conv2 filter.simps(2) filter_append list.size(3) list.size(4))
+next
+  assume asm: "length (filter ((=) a) l) = 1"
+  then have "filter ((=) a) l = [a]"
+  proof -
+    let ?xs = "filter ((=) a) l"
+    have "length ?xs = 1"
+      using asm by blast
+    then show ?thesis 
+      by (metis (full_types) Cons_eq_filterD One_nat_def length_0_conv length_Suc_conv)
+  qed
+  then have "\<exists>j. j < length l \<and> l ! j = a" 
+    by (metis (full_types) filter_False in_set_conv_nth list.discI)
+  then obtain j where j: "j < length l" "l ! j = a" by blast
+  moreover have "\<forall>k. k < length l \<and> k \<noteq> j \<longrightarrow> l ! k \<noteq> a"
+  proof (rule allI, rule impI)
+    fix k
+    assume assm: "k < length l \<and> k \<noteq> j"
+    show "l ! k \<noteq> a"
+    proof (rule ccontr)
+      assume lka: "\<not> l ! k \<noteq> a"
+      show False
+      proof (cases "k < j")
+        let ?xs = "take (k+1) l"
+        let ?ys = "drop (k+1) l"
+        case True
+        then have "length (filter ((=) a) ?xs) > 0" 
+          by (metis (full_types, hide_lams) add.commute assm discrete filter_empty_conv length_greater_0_conv length_take less_add_one lka min.absorb2 nth_mem nth_take)
+        moreover have "length (filter ((=) a) ?ys) > 0"
+        proof -
+          have "?ys ! (j - (k+1)) = l ! j" 
+            using True assm by auto
+          moreover have "j - (k+1) < length ?ys" 
+            using True \<open>j < length l\<close> by auto
+          ultimately show ?thesis 
+            by (metis (full_types) \<open>l ! j = a\<close> filter_empty_conv length_greater_0_conv nth_mem)
+        qed
+        moreover have "?xs @ ?ys = l" 
+          using append_take_drop_id by blast
+        ultimately have "length (filter ((=) a) l) > 1" 
+          by (metis (no_types, lifting) One_nat_def Suc_eq_plus1 asm filter_append length_append less_add_eq_less less_one nat_neq_iff)
+        then show False using asm by simp
+      next
+        let ?xs = "take (j+1) l"
+        let ?ys = "drop (j+1) l"
+        case False
+        then have "length (filter ((=) a) ?xs) > 0" 
+          by (metis (full_types, hide_lams) add.commute j discrete filter_empty_conv length_greater_0_conv length_take less_add_one min.absorb2 nth_mem nth_take)
+        moreover have "length (filter ((=) a) ?ys) > 0"
+        proof -
+          have "?ys ! (k - (j+1)) = l ! k" 
+            using False assm by auto
+          moreover have "k - (j+1) < length ?ys" 
+            using False assm by auto
+          ultimately show ?thesis 
+            by (metis (full_types) filter_empty_conv length_greater_0_conv lka nth_mem)
+        qed
+        moreover have "?xs @ ?ys = l" 
+          using append_take_drop_id by blast
+        ultimately have "length (filter ((=) a) l) > 1" 
+          by (metis (no_types, lifting) One_nat_def Suc_eq_plus1 asm filter_append length_append less_add_eq_less less_one nat_neq_iff)
+        then show False using asm by simp
+      qed
+    qed
+  qed
+  ultimately show "\<exists>!j. j < length l \<and> l ! j = a" by blast
 qed
 
 end
