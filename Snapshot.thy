@@ -76,6 +76,11 @@ qed
 abbreviation S where
   "S \<equiv> s init"
 
+lemma no_messages_if_no_channel:
+  assumes "trace init t final"
+  shows "channel cid = None \<Longrightarrow> msgs (s init t i) cid = []"
+  using no_messages_introduced_if_no_channel[OF assms no_msgs_if_no_channel] by blast
+
 lemma S_induct [consumes 3, case_names S_init S_step]:
   "\<lbrakk> trace init t final; i \<le> j; j \<le> length t;
      \<And>i. P i i;
@@ -111,57 +116,6 @@ proof -
   moreover have "i \<le> ?k \<and> ?k < j" 
     using \<open>l < length (take (j - i) (drop i t))\<close> by auto
   ultimately show ?thesis by blast
-qed
-
-lemma no_messages_if_no_channel:
-  assumes
-    "trace init t final"
-  shows
-    "channel cid = None \<Longrightarrow> msgs (S t i) cid = []"
-proof (induct i)
-  case 0
-  then show ?case
-    by (metis assms exists_trace_for_any_i no_msgs_if_no_channel take0 tr_init trace_and_start_determines_end)
-next
-  case (Suc n)
-  have f: "trace (S t n) (take ((Suc n) - n) (drop n t)) (S t (Suc n))"
-    using exists_trace_for_any_i_j order_le_less valid assms by blast
-  then show ?case
-  proof (cases "drop n t = Nil")
-    case True
-    then show ?thesis using Suc.hyps Suc.prems
-      by (metis f tr_init trace_and_start_determines_end take_Nil) 
-  next
-    case False
-    have suc_n_minus_n: "Suc n - n = 1" by auto
-    then have "length (take ((Suc n) - n) (drop n t)) = 1" using False by auto
-    then obtain ev where "ev # Nil = take ((Suc n) - n) (drop n t)"
-      by (metis False One_nat_def suc_n_minus_n length_greater_0_conv self_append_conv2 take_eq_Nil take_hd_drop)
-    then have g: "(S t n) \<turnstile> ev \<mapsto> (S t (Suc n))"
-      by (metis f tr_init trace_and_start_determines_end trace_decomp_head)
-    then show ?thesis
-    proof (cases ev)
-      case (Snapshot r)
-      then show ?thesis 
-        using Suc.hyps Suc.prems g by auto
-    next
-      case (RecvMarker cid' s r)
-      have "cid' \<noteq> cid" using RecvMarker can_occur_def g Suc by auto
-      with RecvMarker Suc g show ?thesis by (cases "has_snapshotted (S t n) s", auto)
-    next
-      case (Trans r u u')
-      then show ?thesis
-        by (metis Suc.hyps Suc.prems g next_trans)
-    next
-      case (Send cid' r s u u' m)
-      have "cid' \<noteq> cid" using Send can_occur_def g Suc by auto
-      then show ?thesis using Suc g Send by simp
-    next
-      case (Recv cid' s r u u' m)
-      have "cid' \<noteq> cid" using Recv can_occur_def g Suc by auto
-      then show ?thesis using Suc g Recv by simp
-    qed
-  qed
 qed
 
 lemma no_change_if_ge_length_t:
@@ -436,8 +390,6 @@ proof -
       using \<open>ps (S t i) p \<noteq> None\<close> by blast
   qed
 qed
-
-thm zero_induct
 
 lemma all_processes_snapshotted_in_final_state:
   assumes
@@ -5240,7 +5192,7 @@ theorem snapshot_algorithm_is_correct:
     "trace init t final"
   shows
     "\<exists>t' i. trace init t' final \<and> perm t' t
-          \<and> state_equal_to_snapshot (S t' i) final"
+          \<and> state_equal_to_snapshot (S t' i) final \<and> i \<le> length t'"
 proof -
   obtain t' where "perm t' t" and
                   "all_prerecording_before_postrecording t'"
