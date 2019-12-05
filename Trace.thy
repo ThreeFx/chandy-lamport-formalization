@@ -514,6 +514,58 @@ next
   then show ?case using cs_not_not_started_stable snoc step by blast
 qed
 
+lemma no_messages_introduced_if_no_channel:
+  assumes
+    trace: "trace init t final" and
+    no_msgs_if_no_channel: "\<forall>i. channel i = None \<longrightarrow> msgs init i = []"
+  shows
+    "channel cid = None \<Longrightarrow> msgs (s init t i) cid = []"
+proof (induct i)
+  case 0
+  then show ?case
+    by (metis assms exists_trace_for_any_i no_msgs_if_no_channel take0 tr_init trace_and_start_determines_end)
+next
+  case (Suc n)
+  have f: "trace (s init t n) (take ((Suc n) - n) (drop n t)) (s init t (Suc n))"
+    using exists_trace_for_any_i_j order_le_less trace assms by blast
+  then show ?case
+  proof (cases "drop n t = Nil")
+    case True
+    then show ?thesis using Suc.hyps Suc.prems
+      by (metis f tr_init trace_and_start_determines_end take_Nil) 
+  next
+    case False
+    have suc_n_minus_n: "Suc n - n = 1" by auto
+    then have "length (take ((Suc n) - n) (drop n t)) = 1" using False by auto
+    then obtain ev where "ev # Nil = take ((Suc n) - n) (drop n t)"
+      by (metis False One_nat_def suc_n_minus_n length_greater_0_conv self_append_conv2 take_eq_Nil take_hd_drop)
+    then have g: "(s init t n) \<turnstile> ev \<mapsto> (s init t (Suc n))"
+      by (metis f tr_init trace_and_start_determines_end trace_decomp_head)
+    then show ?thesis
+    proof (cases ev)
+      case (Snapshot r)
+      then show ?thesis 
+        using Suc.hyps Suc.prems g by auto
+    next
+      case (RecvMarker cid' sr r)
+      have "cid' \<noteq> cid" using RecvMarker can_occur_def g Suc by auto
+      with RecvMarker Suc g show ?thesis by (cases "has_snapshotted (s init t n) sr", auto)
+    next
+      case (Trans r u u')
+      then show ?thesis
+        by (metis Suc.hyps Suc.prems g next_trans)
+    next
+      case (Send cid' r s u u' m)
+      have "cid' \<noteq> cid" using Send can_occur_def g Suc by auto
+      then show ?thesis using Suc g Send by simp
+    next
+      case (Recv cid' s r u u' m)
+      have "cid' \<noteq> cid" using Recv can_occur_def g Suc by auto
+      then show ?thesis using Suc g Recv by simp
+    qed
+  qed
+qed
+
 end (* context distributed_system *)
 
 end (* theory Trace *)
