@@ -13,6 +13,11 @@ context distributed_system
 
 begin
 
+text \<open>We can think of a trace as the transitive closure of the next
+relation. A trace consists of initial and final configurations $c$ and
+$c'$, with an ordered list of events $t$ occurring sequentially on $c$,
+yielding $c'$.\<close>
+
 inductive (in distributed_system) trace where
     tr_init: "trace c [] c"
   | tr_step: "\<lbrakk> c \<turnstile> ev \<mapsto> c'; trace c' t c'' \<rbrakk>
@@ -187,6 +192,11 @@ qed
 
 definition run_trace where
   "run_trace \<equiv> construct_fun_from_rel trace_rel"
+
+text \<open>In order to describe intermediate configurations
+of a trace we introduce the $s$ function definition, which,
+given an initial configuration $c$, a trace $t$ and an index $i \in \mathbb{N}$,
+determines the unique state after the first $i$ events of $t$.\<close>
 
 definition s where
   "s c t i = (THE c'. trace c (take i t) c')"

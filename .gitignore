@@ -1,3 +1,5 @@
 /output/
 *.pdf
 *.thy~
+*~
+*.tar.gz

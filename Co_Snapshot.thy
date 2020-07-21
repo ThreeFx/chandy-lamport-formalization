@@ -1,6 +1,21 @@
 theory Co_Snapshot
-imports Snapshot Ordered_Resolution_Prover.Lazy_List_Chain
+  imports
+    Snapshot
+    Ordered_Resolution_Prover.Lazy_List_Chain
 begin
+
+section \<open>Extension to infinite traces\<close>
+
+text \<open>The computation locale assumes that there already exists a known
+final configuration $c'$ to the given initial $c$ and trace $t$. However,
+we can show that the snapshot algorithm must terminate correctly even if
+the underlying computation itself does not terminate. We relax
+the trace relation to allow for a potentially infinite number of ``intermediate'' events, and
+show that the algorithm's correctness still holds when imposing the same constraints
+as in the computation locale.
+
+We use a preexisting theory of lazy list chains by Schlichtkrull, Blanchette,
+Traytel and Waldmann~\cite{Ordered_Resolution_Prover-AFP} to construct infinite traces.\<close>
 
 primrec ltake where
   "ltake 0 t = []"

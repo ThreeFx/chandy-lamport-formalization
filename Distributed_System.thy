@@ -1,5 +1,9 @@
 section \<open>Modelling distributed systems\<close>
 
+text \<open>We assume familiarity with Chandy and Lamport's
+paper \emph{Distributed Snapshots: Determining Global States of
+Distributed Systems}~\cite{chandy}.\<close>
+
 theory Distributed_System
 
 imports Main
@@ -19,12 +23,15 @@ datatype recording_state =
   | Done
 
 text \<open>We characterize distributed systems by three underlying type variables:
-
 Type variable 'p captures the processes of the underlying system.
-
 Type variable 's describes the possible states of the processes.
+Finally, type variable 'm describes all possible messages in said system.
 
-Finally, type variable 'm describes all possible messages in said system.\<close>
+Each process is in exactly one state at any point in time of the system.
+Processes are interconnected by directed channels, which hold messages in-flight
+between connected processes. There can be an arbitrary number of channels between
+different processes. The entire state of the system including the (potentially unfinished)
+snapshot state is called \emph{configuration}.\<close>
 
 record ('p, 's, 'm) configuration =
   states :: "'p \<Rightarrow> 's"
@@ -32,6 +39,12 @@ record ('p, 's, 'm) configuration =
 
   process_snapshot :: "'p \<Rightarrow> 's option"
   channel_snapshot :: "channel_id \<Rightarrow> 'm fifo * recording_state"
+
+text \<open>An event in Chandy and Lamport's formalization describes a
+process' state transition, optionally producing or consuming
+(but not both) a message on a channel. Additionally, a process may either initiate
+a snapshot spontaneously, or is forced to do so by receiving a snapshot \emph{marker}
+on one of it's incoming channels.\<close>
 
 datatype ('p, 's, 'm) event =
     isTrans: Trans (occurs_on: 'p) 's 's
@@ -49,6 +62,8 @@ datatype ('p, 's, 'm) event =
                              (occurs_on: 'p)
                              (partner: 'p)
 
+text \<open>We introduce abbreviations and type synoyms for commonly used terms.\<close>
+
 type_synonym ('p, 's, 'm) trace = "('p, 's, 'm) event list"
 
 abbreviation ps where "ps \<equiv> process_snapshot"
@@ -59,6 +74,11 @@ abbreviation no_snapshot_change where
 
 abbreviation has_snapshotted where
   "has_snapshotted c p \<equiv> process_snapshot c p \<noteq> None"
+
+text \<open>A regular event is an event as described in Chandy and Lamport's
+original paper: A state transition accompanied by the emission
+or receiving of a message. Nonregular events are related to
+snapshotting and receiving markers along communication channels.\<close>
 
 definition regular_event[simp]:
   "regular_event ev \<equiv> (isTrans ev \<or> isSend ev \<or> isRecv ev)"
@@ -77,6 +97,16 @@ lemma event_occurs_on_unique:
 
 subsection \<open>The distributed system locale\<close>
 
+text \<open>In order to capture Chandy and Lamport's computation system
+we introduce two locales. The distributed system locale describes
+global truths, such as the mapping from channel IDs to sender and
+receiver processes, the transition relations for the underlying
+computation system and the core assumption that no process has
+a channel to itself. While not explicitly mentioned in Chandy's
+and Lamport's work, it makes sense to assume that a channel need
+not communicate to itself via messages, since it shares memory with
+itself.\<close>
+
 locale distributed_system =
   fixes
     channel :: "channel_id \<Rightarrow> ('p * 'p) option" and
@@ -88,7 +118,7 @@ locale distributed_system =
       "\<forall>i. \<nexists>p. channel i = Some (p, p)"
 begin
 
-subsubsection \<open>Global state transitions\<close>
+subsubsection \<open>State transitions\<close>
 
 definition can_occur :: "('p, 's, 'm) event \<Rightarrow> ('p, 's, 'm) configuration \<Rightarrow> bool" where
 "can_occur ev c \<equiv> (case ev of
@@ -187,6 +217,12 @@ abbreviation check_recv_occur where
      then channel_snapshot c' i = (fst (channel_snapshot c i) @ [msg], Recording)
      else channel_snapshot c i = channel_snapshot c' i))"
 
+text \<open>The \emph{next} predicate lets us express configuration transitions
+using events. The predicate $next(s_1, e, s_2)$ denotes the transition
+of the configuration $s_1$ to $s_2$ via the event $e$. It ensures that
+$e$ can occur in state $s_1$ and the state $s_2$ is correctly constructed
+from $s_1$.\<close>
+
 primrec "next" ::
   "('p, 's, 'm) configuration
   \<Rightarrow> ('p, 's, 'm) event
@@ -203,6 +239,8 @@ primrec "next" ::
       check_send_occur c c' i p q s s' msg"
   | next_recv: "c \<turnstile> Recv i p q s s' msg \<mapsto> c' =
       check_recv_occur c c' i p q s s' msg"
+
+text \<open>Useful lemmas about state transitions\<close>
 
 lemma state_and_event_determine_next:
   assumes

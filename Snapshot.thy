@@ -13,6 +13,20 @@ begin
 
 subsection \<open>The computation locale\<close>
 
+text \<open>We extend the distributed system locale presented
+earlier: Now we are given a trace t of the distributed system between
+two configurations, the initial and final configuartions of t. Our objective
+is to show that the Chandy--Lamport algorithm terminated successfully and
+exhibits the same properties as claimed in~\cite{chandy}. In the initial state
+no snapshotting must have taken place yet, however the computation itself may
+have progressed arbitrarily far already.
+
+We assume that there exists at least one process, that the
+total number of processes in the system is finite, and that there
+are only finitely many channels between the processes. The process graph
+is strongly connected. Finally there are Chandy and Lamport's core assumptions:
+every process snapshots at some time and no marker may remain in a channel forever.\<close>
+
 locale computation = distributed_system +
   fixes
     init final :: "('a, 'b, 'c) configuration"
@@ -60,17 +74,6 @@ proof -
   then obtain r s where "has_channel r s" 
     by (meson tranclpD)
   then show ?thesis using has_channel_def by auto
-qed
-
-lemma finite_channels_2:
-  shows
-    "finite {i. channel i \<noteq> None}"
-proof (rule ccontr)
-  assume "~ finite {i. channel i \<noteq> None}"
-  then have "infinite {i. channel i \<noteq> None}" by simp
-  moreover have "{i. channel i \<noteq> None} = {i. \<exists>p q. channel i = Some (p, q) }" by auto
-  ultimately have "infinite {i. \<exists>p q. channel i = Some (p, q) }" by simp
-  then show False using finite_channels by simp
 qed
 
 abbreviation S where
@@ -209,6 +212,10 @@ next
 qed
 
 subsection \<open>Termination\<close>
+
+text \<open>We prove that the snapshot algorithm terminates, as exhibited
+by lemma \texttt{snapshot\_algorithm\_must\_terminate}. In the final configuration all
+processes have snapshotted, and no markers remain in the channels.\<close>
 
 lemma must_exist_snapshot:
   assumes
@@ -446,7 +453,7 @@ proof -
     using snapshot_stable asm exists_trace_for_any_i_j valid assms by blast
   let ?s = "(\<lambda>cid. (next_marker_free_state t i cid)) ` { cid. channel cid \<noteq> None }"
   have "?s \<noteq> empty" using exists_some_channel by auto
-  have fin_s: "finite ?s" using finite_channels_2 by blast
+  have fin_s: "finite ?s" using finite_channels by simp
   let ?phi = "Max ?s"
   have "?phi \<ge> i"
   proof (rule ccontr)
@@ -486,6 +493,13 @@ proof -
 qed
 
 subsection \<open>Correctness\<close>
+
+text \<open>The greatest part of this work is spent on the correctness
+of the Chandy-Lamport algorithm. We prove that the snapshot is
+consistent, i.e.\ there exists a permutation $t'$ of the trace $t$ and an intermediate
+configuration $c'$ of $t'$ such that the configuration recorded in the snapshot
+corresponds to the snapshot taken during execution of $t$, which is given as Theorem 1
+in~\cite{chandy}.\<close>
 
 lemma snapshot_stable_ver_2:
   shows "trace init t final \<Longrightarrow> has_snapshotted (S t i) p \<Longrightarrow> j \<ge> i \<Longrightarrow> has_snapshotted (S t j) p"
@@ -5185,8 +5199,6 @@ next
   ultimately show ?case using Suc.hyps by blast
 qed
 
-subsection \<open>Correctness\<close>
-
 theorem snapshot_algorithm_is_correct:
   assumes
     "trace init t final"
@@ -5202,6 +5214,9 @@ proof -
 qed
 
 subsection \<open>Stable property detection\<close>
+
+text \<open>Finally, we show that the computed snapshot is indeed
+suitable for stable property detection, as claimed in~\cite{chandy}.\<close>
 
 definition stable where
   "stable p \<equiv> (\<forall>c. p c \<longrightarrow> (\<forall>t c'. trace c t c' \<longrightarrow> p c'))"
